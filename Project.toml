@@ -3,6 +3,12 @@ uuid = "f252d6a7-0c63-4370-b21c-06c34ff2c5e3"
 authors = ["Daniel Forero"]
 version = "0.1.0"
 
+[deps]
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+Recfast = "9a1e84d0-d7ca-476d-8744-83030c58cf7d"
+
 [compat]
 julia = "1"
 
