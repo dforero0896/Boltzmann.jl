@@ -3,37 +3,21 @@
 export boltzmann_derivatives!, solve_boltzmann
 
 function boltzmann_derivatives!(dy, y, p, t)
-    k, c, ℓ_max = p
+    k, c, ℓ_max, cₛ_fun, τ_dot_fun = p
     lna = t #Our time coordinate is lna
     a = exp(lna)
     z = 1 / a - 1
-
-
-    H₀ = c.h * 100
-    Ω_m = c.Ω_c₀ + c.Ω_b₀
-    Ω_r = c.Ω_ν₀ + c.Ω_γ₀
-    rh = hubble_distance(c) * c.h #h^-1 Mpc
-    H0_Mpc = 1 / rh  # [h Mpc^-1]
-    #H_Mpc = (H / H0) * H0_Mpc  # [h Mpc^-1]
-    k_H = k / (a * H(c, (1+z)^(-1)))
     
-
-
-    
-    # Equations frω Appendix A in https://arxiv.org/pdf/2112.08395.pdf
+    # Equations from Appendix A in https://arxiv.org/pdf/2112.08395.pdf
     # Derivatives wrt lna
-    k² = k^2
     Hz = H(c, z)
-    #R = 3ρ_b(c,z)/4ρ_γ(c,z)
-    R = 3Ω_b(c,z)/4Ω_γ(c,z)
-    cₛ² = 1/(3(1+R))
-    nₑ = ρ_b(c,z) / mp #Number of baryons
-    τ_dot = nₑ * σT
+    R = 3Ω_b(c,z)/4Ω_γ(c,z) * a
+    cₛ² = cₛ_fun(c, a)^2
+    τ_dot = τ_dot_fun(c,a)
     ηz = η(c, z) 
 
 
     Φ, δ, u, δ_b, u_b = y[1:5]
-    ℓ_max_ind = ℓ_max + 1
     Θ_ℓ = view(y, 6:6+ℓ_max)
     Θ_Pℓ = view(y, 6 + ℓ_max + 1:6 + 2ℓ_max + 1)
     N_ℓ = view(y, 6 + 2ℓ_max + 2:6 + 3ℓ_max + 2)
@@ -42,12 +26,17 @@ function boltzmann_derivatives!(dy, y, p, t)
     Θ_Pℓ′ = view(dy, 6 + ℓ_max + 1:6 + 2ℓ_max + 1)
     N_ℓ′ = view(dy, 6 + 2ℓ_max + 2:6 + 3ℓ_max + 2)
     
+    #@show a
+    #@show z
+    #@show τ_dot
+    #@show cₛ²
 
     # Einstein  Equations
 
-    Ψ = -Φ - 12 * (100 * c.h / (k * a))^2 * (Ω_γ(c, z) * Θ_ℓ[3] + Ω_ν(c, z) * N_ℓ[3])
+    #Ψ = -Φ - 12 * (100 * c.h / (k * a))^2 * (Ω_γ(c, z) * Θ_ℓ[3] + Ω_ν(c, z) * N_ℓ[3])
+    Ψ = -Φ - 12 * (100 * c.h / (k * a))^2 * (c.Ω_γ₀ * Θ_ℓ[3] + c.Ω_ν₀ * N_ℓ[3])
     Π = Θ_ℓ[3] + Θ_Pℓ[1] + Θ_Pℓ[3]
-    Φ′ = Ψ - (k / (a*Hz))^2 * Φ / 3 + 0.5 * (c.h * 100 / Hz)^2 * ((Ω_c(c, z) * δ + Ω_b(c, z) * δ_b) * a^(-3) + 4 * a^(-4) * (Ω_γ(c, z) * Θ_ℓ[1] + Ω_ν(c, z) * N_ℓ[1]))
+    Φ′ = Ψ - (k / (a*Hz))^2 * Φ / 3 + 0.5 * (c.h * 100 / Hz)^2 * ((c.Ω_c₀ * δ + c.Ω_b₀ * δ_b) * a^(-3) + 4 * a^(-4) * (c.Ω_γ₀ * Θ_ℓ[1] + c.Ω_ν₀ * N_ℓ[1]))
 
     # Dark Matter
     δ′ = - k * u / (a*Hz) - 3 * Φ′
@@ -56,15 +45,14 @@ function boltzmann_derivatives!(dy, y, p, t)
     # Baryonic Matter
     δ_b′ = - k * u_b / (a*Hz) - 3 * Φ′
     u_b′ = -u_b + k * Ψ / (a*Hz) + τ_dot / (R * a * Hz) * (u_b - 3*Θ_ℓ[2]) + k * cₛ² * δ_b / (a*Hz)
-    @show Ψ, u_b′, τ_dot, R, cₛ²
+    
     # Photon temperature
     Θ_ℓ′[1] = -k * Θ_ℓ[2] / (a*Hz) - Φ′
     Θ_ℓ′[2] = k * (Θ_ℓ[1] - 2Θ_ℓ[3] + Ψ) / (3a*Hz) + τ_dot * (Θ_ℓ[2] - u_b / 3) / (a*Hz)
-    Θ_ℓ′[3] = k * (2Θ_ℓ[2] - 3Θ_ℓ[4]) / (5a*Hz) + τ_dot * (Θ_Pℓ[1] - Π / 2) / (a*Hz)
-
+    Θ_ℓ′[3] = k * (2Θ_ℓ[2] - 3Θ_ℓ[4]) / (5a*Hz) + τ_dot * (Θ_Pℓ[1] - Π / 2) / (a*Hz) #Eq in paper, equivalent to the one in PyCosmo source
     for ℓ_ind in 4:ℓ_max
-        ℓ = ℓ_ind -1
-        Θ_ℓ′[ℓ_ind] = k * (ℓ * Θ_ℓ[ℓ_ind - 1] - (ℓ - 1) * Θ_ℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1)) + τ_dot * Θ_ℓ[ℓ_ind] / (a*Hz)
+        ℓ = ℓ_ind -1 # ℓ = 3 is at index 4 and so on
+        Θ_ℓ′[ℓ_ind] = k * (ℓ * Θ_ℓ[ℓ_ind - 1] - (ℓ + 1) * Θ_ℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1)) + τ_dot * Θ_ℓ[ℓ_ind] / (a*Hz)
     end #for
 
     # Photon polarization
@@ -75,7 +63,7 @@ function boltzmann_derivatives!(dy, y, p, t)
 
     for ℓ_ind in 4:ℓ_max
         ℓ = ℓ_ind -1
-        Θ_Pℓ′[ℓ_ind] = k * (ℓ * Θ_Pℓ[ℓ_ind - 1] - (ℓ - 1) * Θ_Pℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1)) + τ_dot * Θ_Pℓ[ℓ_ind] / (a*Hz)
+        Θ_Pℓ′[ℓ_ind] = k * (ℓ * Θ_Pℓ[ℓ_ind - 1] - (ℓ + 1) * Θ_Pℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1)) + τ_dot * Θ_Pℓ[ℓ_ind] / (a*Hz)
     end #for
 
     # Massless neutrinos
@@ -85,7 +73,7 @@ function boltzmann_derivatives!(dy, y, p, t)
 
     for ℓ_ind in 3:ℓ_max
         ℓ = ℓ_ind -1
-        N_ℓ′[ℓ_ind] = k * (ℓ * N_ℓ[ℓ_ind - 1] - (ℓ - 1) * N_ℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1))
+        N_ℓ′[ℓ_ind] = k * (ℓ * N_ℓ[ℓ_ind - 1] - (ℓ + 1) * N_ℓ[ℓ_ind+1]) / (a * Hz * (2ℓ + 1))
     end #for
     
 
@@ -101,14 +89,17 @@ function boltzmann_derivatives!(dy, y, p, t)
     dy[5] = u_b′   
 
 
-
+    #@show @view dy[1:5]
+    #@show Θ_ℓ′
+    #@show Θ_Pℓ′
+    #@show N_ℓ′
 
 end #func
 
 
 function boltzmann_ics(c::Cosmology, k, ℓ_max)
     @assert ℓ_max > 2
-        
+    
     H₀ = c.h * 100
     Ω_m = c.Ω_c₀ + c.Ω_b₀
     Ω_r = c.Ω_ν₀ + c.Ω_γ₀
@@ -248,11 +239,14 @@ function boltzmann_ics(c::Cosmology, k, ℓ_max)
 
     N_ℓ[2] = θ_ν / k / 3.0  # N_1
     N_ℓ[3] = σ_ν / 2.0  # N_2
-    N_ℓ[4] = (
-        l3_ν / 4.0
-    )  # N_3    l3_ν=F_nu,3 in MB95 notation = N_3*4 in Dodelson notation
+    N_ℓ[4] = l3_ν / 4.0 # N_3    l3_ν=F_nu,3 in MB95 notation = N_3*4 in Dodelson notation
     
-    @show y, a₀
+    #@show y
+    #@show Θ_ℓ
+    #@show Θ_Pℓ
+    #@show N_ℓ
+    #@show a₀
+    #@show log(a₀)
 
     return y, log(a₀)
 
@@ -260,10 +254,18 @@ end #func
 
 function solve_boltzmann(c::Cosmology, k, ℓ_max)
 
-    
-    p = k, c, ℓ_max
+    z, x_He, x_H, T_m, x_e = precompute_recfast(c::Cosmology)
+    cₛ_fun, τ_dot_fun =  recombination_functions(c, z, x_He, x_H, T_m, x_e; autodiff = false)
+    p = k, c, ℓ_max, cₛ_fun, τ_dot_fun
     y0, loga0 = boltzmann_ics(c::Cosmology, k, ℓ_max)
-    tspan = (loga0, 0)
+    tspan = (loga0, log(1.))
     prob = ODEProblem(boltzmann_derivatives!, y0, tspan, p)
-    sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
+    alg = TRBDF2()
+    #alg = CVODE_BDF()
+    #alg = Tsit5()
+    sol = solve(prob, alg, reltol=1e-5, abstol=1e-5)
+    sol
+    
+
 end #func
+

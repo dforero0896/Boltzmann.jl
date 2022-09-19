@@ -27,6 +27,7 @@ const π² = π^2
 
 @with_kw mutable struct Cosmology{T<:Real}
 
+    Yp::T = 0.24
     ω_b::T = 0.0225
     ω_c::T = 0.12
     h::T = 0.67
@@ -55,6 +56,8 @@ const π² = π^2
     Ω_Λ₀::T = NaN
     Ω_ν₀::T = NaN
     Ω_γ₀::T = NaN
+    Ω_m₀::T = NaN
+    Ω_r₀::T = NaN
 
     T_γ₀::T = NaN
     T_ν₀::T = NaN
@@ -70,7 +73,7 @@ end #struct
 function derive_params!(c)
     c.h² = c.h^2
     H₀ = c.h * 100
-    c.ρ_crit = 3 * H₀^2 / (8π * G) * 1e6 * mpc * msun * c.h² #[h^2 M_sun Mpc^-3]
+    c.ρ_crit = 3 * H₀^2 / (8π * G) * 1e6 * mpc / msun / c.h² #[h^2 M_sun Mpc^-3]
     c.rh = speed_of_light_km_s * c.h / H₀ # Mpc / h
     
     # Photons
@@ -96,6 +99,9 @@ function derive_params!(c)
     c.Ω_Λ₀ = 1 - c.Ω_k₀ - c.Ω_b₀ - c.Ω_c₀ - c.Ω_ν₀ - c.Ω_γ₀
     c.ω_Λ = c.Ω_Λ₀ * c.h²
     c.ρ_Λ₀ = c.ω_Λ * ρx_over_ωx
+
+    c.Ω_m₀ = c.Ω_b₀ + c.Ω_c₀
+    c.Ω_r₀ = c.Ω_γ₀ + c.Ω_ν₀
 
 
 end #func
@@ -143,16 +149,19 @@ E(c::Cosmology, z) = sqrt(Ω_ν(c, z) + Ω_γ(c, z) + Ω_b(c,z) + Ω_c(c,z) + Ω
 Eρ(c::Cosmology, z) = sqrt(ρ_ν(c, z) + ρ_γ(c, z) + ρ_b(c,z) + ρ_c(c,z) + ρ_k(c,z) +  ρ_Λ(c, z))
 H(c::Cosmology, z) = c.h * 100 * E(c, z)
 χ(c::Cosmology, z1, z2) = quadgk(z -> 1 / H(c, z), z1, z2, rtol=1e-8)[1] # Mpc s / km
+χ_a(c::Cosmology, a1, a2) = quadgk(a -> 1 / H(c, 1 / a - 1) / a^2, a1, a2, rtol=1e-8)[1] # Mpc s / km
 χ(c::Cosmology, z) = χ(c, 0, z) # Mpc s / km
 d_hubble(c::Cosmology) = 1 / (c.h * 100)
 hubble_distance(c::Cosmology) = speed_of_light_km_s * d_hubble(c)
 comoving_distance(c::Cosmology, z) = speed_of_light_km_s * χ(c, z)  # Mpc
-η(c::Cosmology, z1, z2) = quadgk(z -> speed_of_light_km_s / H(c, z), z1, z2, rtol=1e-8)[1]
-η(c::Cosmology, z) = η(c::Cosmology, z, 0)
+η(c::Cosmology, z1, z2) = quadgk(z -> 1 / H(c, z), z1, z2, rtol=1e-8)[1] * c.h * 100 * c.rh
+η(c::Cosmology, z) = η(c::Cosmology, z, Inf)
+η_a(c::Cosmology, a1, a2) = quadgk(a -> 1 / H(c, 1 / a - 1) / a^2, a1, a2, rtol=1e-8)[1] * c.h * 100 * c.rh
 
 
 
-# Recombination usinf RecFast in julia implementation
+
+
 
 
 
