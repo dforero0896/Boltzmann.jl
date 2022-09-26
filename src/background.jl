@@ -36,6 +36,7 @@ const π² = π^2
     T_cmb::T = 2.725
     w0::T = -1
     wa::T = 0
+    ns::T = 0.96
     
     # Derived params
     ρ_b₀::T = NaN
@@ -153,6 +154,8 @@ comoving_distance(c::Cosmology, z) = speed_of_light_km_s * χ(c, z)  # Mpc
 η(c::Cosmology, z) = η(c::Cosmology, z, Inf)
 η_a(c::Cosmology, a1, a2) = quadgk(a -> 1 / H(c, 1 / a - 1) / a^2, a1, a2, rtol=1e-8)[1] * c.h * 100 * c.rh
 η_a(c::Cosmology, a) = a < 1e-20 ? 0 : η_a(c::Cosmology, 0, a)
+a_Λm(c::Cosmology) = (c.Ω_m₀ / c.Ω_Λ₀)^(1 / 3)
+a_rm(c::Cosmology) = (c.Ω_r₀ / c.Ω_m₀)
 
 
 

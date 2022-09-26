@@ -361,6 +361,26 @@ function solve_boltzmann(c::Cosmology, k::Real, ℓ_max::Int, a_grid::Vector{<:A
 
 end #func
 
+function solve_boltzmann(c::Cosmology, k::Vector{<:AbstractFloat}, ℓ_max::Int, a_grid::Vector{<:AbstractFloat})
+
+    z, x_He, x_H, T_m, x_e = precompute_recfast(c::Cosmology)
+    cₛ_fun, τ_dot_fun =  recombination_functions(c, z, x_He, x_H, T_m, x_e; autodiff = false)
+    solutions = Array{Dict}(undef, length(k))
+    for i in eachindex(k)
+        p = k[i], c, ℓ_max, cₛ_fun, τ_dot_fun
+        y0, loga0 = boltzmann_ics(c::Cosmology, k[i], ℓ_max)
+        tspan = (loga0, 0)
+        prob = ODEProblem(boltzmann_derivatives!, y0, tspan, p)
+        alg = KenCarp4()
+        sol = solve(prob, alg, reltol=1e-5, abstol=1e-5, saveat = log.(a_grid))
+
+        solutions[i] = unpack_fields(sol, ℓ_max)
+    end #for
+    
+    solutions
+
+end #func
+
 function unpack_fields(sol, ℓ_max)
     fields = Dict()
     fields[:Φ] = [s[1] for s in sol.u]
@@ -372,4 +392,60 @@ function unpack_fields(sol, ℓ_max)
     fields[:Θ_Pℓ] = [s[6 + ℓ_max + 1 + i] for s in sol.u, i in 0:ℓ_max]
     fields[:N_ℓ] = [s[6 + 2ℓ_max + 2 + i] for s in sol.u, i in 0:ℓ_max]
     fields
+end #func
+
+
+function growth(sols::Vector{Dict})
+    [s[:δ][end] / s[:δ][1] for s in sols]
+end #func
+
+function growth(c::Cosmology, a::AbstractFloat, k::AbstractFloat, ℓ_max::Int)
+    sol = solve_boltzmann(c, k, ℓ_max, [a,1])
+    fields = unpack_fields(sol, ℓ_max)
+    (fields[:δ] ./ fields[:δ][end])[1:end-1]
+end #func
+
+function _transfer(sols::Vector{Dict})
+    trans = [s[:Φ][end] / s[:Φ][1] for s in sols]
+    trans
+end #func
+
+function transfer(c::Cosmology, sols::Vector{Dict}, ℓ_max::Int)
+    
+    a_matter = sqrt(a_rm(c) * a_Λm(c))
+    correction = growth(c, a_matter, 1. , ℓ_max) / a_matter * 10 / 9
+
+    trans = _transfer(sols) .* correction
+    return trans
+
+    
+end #func
+
+
+function power_spectrum(c::Cosmology, k_grid::Vector{<:AbstractFloat}, a_grid::Vector{<:AbstractFloat}, ℓ_max::Int)
+
+    k_pivot = 0.5
+    norm = 2 * π^2 * 2e-9 / k_pivot ^ (c.ns - 1)
+    sols = solve_boltzmann(c, k_grid, ℓ_max, a_grid)
+    z_grid = 1 ./ a_grid .- 1
+    H_ = H.(Ref(c), z_grid) / 100c.h / c.rh
+    output = Array{Real, 2}(undef, length(k_grid), length(a_grid))
+    for i in eachindex(sols)
+        s = sols[i]
+        k = k_grid[i]
+        s[:u] *= k
+        s[:u_b] *= k
+        
+        Ω_νm = 0.
+        P_νm = 0.
+        Ω_m_tot = c.Ω_m₀
+        Ω_plus_p_m_tot = c.Ω_m₀
+
+        δ_m_tot = c.Ω_c₀ * s[:δ] + c.Ω_b₀ * s[:δ_b]
+        θ_m_tot = c.Ω_c₀ * s[:u] + c.Ω_b₀ * s[:u_b]
+
+        output[i,:] .= (δ_m_tot ./ Ω_m_tot + (3 .* a_grid .* H_ ./ k^2) .* θ_m_tot / Ω_plus_p_m_tot) .^ 2 * k^(c.ns - 4) .* norm
+    end #for
+        
+    output
 end #func
