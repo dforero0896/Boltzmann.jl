@@ -1,4 +1,5 @@
 module Boltzmann
+using Symbolics
 using Parameters
 using QuadGK
 using DifferentialEquations
@@ -6,6 +7,8 @@ using Recfast
 using Interpolations
 using Zygote
 using Sundials
+using LSODA
+
 
 
 
