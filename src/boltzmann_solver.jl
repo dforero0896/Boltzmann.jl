@@ -361,3 +361,15 @@ function solve_boltzmann(c::Cosmology, k::Real, ℓ_max::Int, a_grid::Vector{<:A
 
 end #func
 
+function unpack_fields(sol, ℓ_max)
+    fields = Dict()
+    fields[:Φ] = [s[1] for s in sol.u]
+    fields[:δ] = [s[2] for s in sol.u]
+    fields[:u] = [s[3] for s in sol.u]
+    fields[:δ_b] = [s[4] for s in sol.u]
+    fields[:u_b] = [s[5] for s in sol.u]
+    fields[:Θ_ℓ] = [s[6+i] for s in sol.u, i in 0:ℓ_max]
+    fields[:Θ_Pℓ] = [s[6 + ℓ_max + 1 + i] for s in sol.u, i in 0:ℓ_max]
+    fields[:N_ℓ] = [s[6 + 2ℓ_max + 2 + i] for s in sol.u, i in 0:ℓ_max]
+    fields
+end #func
